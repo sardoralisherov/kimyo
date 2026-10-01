@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#05070d" />
+<title>3D Periodic Table — CSS3D / Three.js</title>
+<style>
+:root{
+  --bg:#05070d;
+  --panel-bg: rgba(9,14,26,.82);
+  --stroke: rgba(90,140,200,.22);
+  --text:#dbe7ff;
+  --muted:#8fa6c4;
+  --dim:#5c7291;
+}
+*{ box-sizing:border-box; }
+html,body{ height:100%; height:100dvh; margin:0; }
+body{
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  overflow:hidden;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+body::before{
+  content:"";
+  position:fixed; inset:0;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(56,189,248,.14), transparent 58%),
+    radial-gradient(circle at 82% 82%, rgba(168,85,247,.12), transparent 55%),
+    radial-gradient(circle at 12% 18%, rgba(34,211,238,.09), transparent 55%);
+  pointer-events:none; z-index:0;
+}
+body::after{
+  content:"";
+  position:fixed; inset:0;
+  background-image:
+    linear-gradient(rgba(90,140,200,.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(90,140,200,.045) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(circle at 50% 50%, #000 20%, transparent 78%);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, #000 20%, transparent 78%);
+  pointer-events:none; z-index:0;
+}
+#scene{ position:fixed; inset:0; z-index:1; touch-action:none; }
+
+.ui-top{
+  position:fixed; top:0; left:0; right:0;
+  display:flex; align-items:center; justify-content:space-between;
+  gap:14px; padding:14px 20px;
+  padding-top: calc(14px + env(safe-area-inset-top));
+  z-index:20; pointer-events:none;
+}
+.ui-top > *{ pointer-events:auto; }
+.brand{ display:flex; flex-direction:column; gap:2px; flex:0 0 auto; }
+.brand h1{
+  margin:0; font-size:13px; font-weight:700;
+  letter-spacing:.24em; text-transform:uppercase;
+  background: linear-gradient(90deg,#7dd3fc,#a78bfa 60%,#f472b6);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  white-space:nowrap;
+}
+.brand span{ font-size:9px; letter-spacing:.22em; text-transform:uppercase; color:var(--dim); }
+.modes{
+  display:flex; gap:4px; padding:6px; border-radius:14px;
+  background: rgba(10,16,28,.72); border:1px solid var(--stroke);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 40px -18px rgba(0,0,0,.9); flex:0 0 auto;
+}
+.mode-btn{
+  appearance:none; border:1px solid transparent; background:transparent;
+  color:var(--muted); font:inherit; font-size:10.5px; font-weight:600;
+  letter-spacing:.16em; text-transform:uppercase; padding:9px 15px;
+  border-radius:9px; cursor:pointer; white-space:nowrap;
+  transition: color .25s, background .25s, box-shadow .3s, transform .15s;
+}
+.mode-btn:hover{ color:var(--text); background: rgba(80,140,220,.13); }
+.mode-btn:active{ transform: scale(.96); }
+.mode-btn.is-active{
+  color:#04101f;
+  background: linear-gradient(135deg,#4fd1ff,#7c9cff);
+  box-shadow: 0 0 20px rgba(79,209,255,.55), 0 0 44px -12px rgba(79,209,255,.9);
+}
+.tools{ display:flex; gap:8px; align-items:center; flex:0 0 auto; }
+.search-wrap{ position:relative; display:flex; align-items:center; }
+.search-wrap svg{
+  position:absolute; left:11px; width:13px; height:13px;
+  stroke: var(--dim); fill:none; stroke-width:2;
+  pointer-events:none; transition: stroke .2s;
+}
+.search-input{
+  width:200px; padding:10px 30px 10px 32px;
+  border-radius:12px; background: rgba(10,16,28,.72);
+  border:1px solid var(--stroke); color: var(--text); font:inherit;
+  font-size:11.5px; letter-spacing:.04em; outline:none;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transition: border-color .2s, box-shadow .2s, width .25s;
+}
+.search-input::placeholder{ color:var(--dim); letter-spacing:.08em; }
+.search-input:focus{
+  border-color: rgba(79,209,255,.6);
+  box-shadow: 0 0 0 3px rgba(79,209,255,.14), 0 0 22px -6px rgba(79,209,255,.6);
+}
+.search-input:focus + svg{ stroke:#4fd1ff; }
+.search-clear{
+  position:absolute; right:8px; width:20px; height:20px;
+  border-radius:6px; border:none; background:transparent;
+  color:var(--dim); cursor:pointer; display:none;
+  font-size:13px; line-height:1; align-items:center; justify-content:center;
+}
+.search-clear:hover{ color:#fff; background:rgba(90,140,200,.15); }
+.search-wrap.has-value .search-clear{ display:flex; }
+.icon-btn{
+  width:38px; height:38px; border-radius:12px;
+  background: rgba(10,16,28,.72); border:1px solid var(--stroke);
+  color: var(--muted); cursor:pointer; display:flex;
+  align-items:center; justify-content:center;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transition: all .2s;
+}
+.icon-btn svg{
+  width:15px; height:15px; stroke:currentColor; fill:none;
+  stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
+}
+.icon-btn:hover{
+  color:#4fd1ff; border-color: rgba(79,209,255,.5);
+  box-shadow: 0 0 20px -6px rgba(79,209,255,.7);
+}
+.icon-btn:active{ transform:scale(.94); }
+
+.legend{
+  position:fixed; left:20px;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  z-index:20; display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:5px 14px; padding:12px 14px; border-radius:14px;
+  background: var(--panel-bg); border:1px solid var(--stroke);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  max-width:290px;
+}
+.legend__title{
+  grid-column:1 / -1; font-size:8.5px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--dim); margin-bottom:4px;
+  padding-bottom:6px; border-bottom:1px solid var(--stroke);
+  display:flex; justify-content:space-between; align-items:center;
+}
+.legend__reset{
+  font-size:8px; letter-spacing:.14em; color: var(--dim);
+  background:transparent; border:none; cursor:pointer;
+  padding:2px 6px; border-radius:4px; transition: all .15s;
+}
+.legend__reset:hover{ color:#4fd1ff; background:rgba(79,209,255,.1); }
+.legend__item{
+  display:flex; align-items:center; gap:7px;
+  font-size:9.5px; letter-spacing:.09em; text-transform:uppercase;
+  color:var(--muted); white-space:nowrap; padding:4px 7px;
+  margin:-4px -7px; border-radius:6px; cursor:pointer;
+  border:1px solid transparent; transition: all .2s; user-select:none;
+}
+.legend__item i{
+  width:9px; height:9px; border-radius:3px;
+  background: var(--c); box-shadow: 0 0 9px var(--c);
+  flex:none; transition: transform .2s;
+}
+.legend__item:hover{ color:var(--text); background: rgba(90,140,200,.09); }
+.legend__item:hover i{ transform:scale(1.25); }
+.legend__item.is-active{
+  color:#fff; background: rgba(79,209,255,.11);
+  border-color: rgba(79,209,255,.4);
+}
+.legend__item.is-active i{ box-shadow: 0 0 14px var(--c), 0 0 24px var(--c); }
+
+.legend-toggle{
+  display:none; position:fixed; left:14px;
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  z-index:26; width:44px; height:44px; border-radius:14px;
+  background: var(--panel-bg); border:1px solid var(--stroke);
+  color: var(--muted); cursor:pointer;
+  align-items:center; justify-content:center;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+.legend-toggle svg{ width:18px; height:18px; }
+.legend-toggle:active{ transform: scale(.94); }
+
+.hint{
+  position:fixed; left:50%;
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  transform:translateX(-50%); z-index:20;
+  font-size:9.5px; letter-spacing:.18em; text-transform:uppercase;
+  color:var(--dim); pointer-events:none; text-align:center;
+  white-space:nowrap; transition: opacity .3s;
+}
+body.panel-open .hint{ opacity: 0; }
+
+.panel{
+  position:fixed; top:88px; right:20px; width:272px;
+  z-index:25; padding:20px; border-radius:18px;
+  background: var(--panel-bg); border:1px solid var(--stroke);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 30px 70px -30px #000, 0 0 60px -30px var(--c, #4fd1ff);
+  transform: translateX(calc(100% + 40px)); opacity:0;
+  pointer-events:none;
+  transition: transform .5s cubic-bezier(.16,.9,.28,1), opacity .35s;
+}
+.panel.is-visible{ transform:none; opacity:1; pointer-events:auto; }
+.panel__close{
+  position:absolute; top:12px; right:12px;
+  width:26px; height:26px; border-radius:8px;
+  border:1px solid var(--stroke); background:transparent;
+  color:var(--muted); font-size:14px; line-height:1;
+  cursor:pointer; transition: all .2s;
+}
+.panel__close:hover{ color:#fff; border-color:var(--c); box-shadow:0 0 14px -2px var(--c); }
+.panel__cat{
+  font-size:9px; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--c, #4fd1ff); margin-bottom:12px; padding-right:28px;
+}
+.panel__head{ display:flex; align-items:baseline; gap:12px; }
+.panel__symbol{
+  font-size:42px; font-weight:800; line-height:1;
+  color:var(--c, #4fd1ff); text-shadow: 0 0 26px var(--c, #4fd1ff);
+}
+.panel__name{ font-size:15px; font-weight:600; letter-spacing:.02em; color:var(--text); }
+.panel__z{ font-size:11px; color:var(--dim); letter-spacing:.1em; }
+.panel__stats{
+  margin-top:18px; display:grid;
+  grid-template-columns:1fr 1fr; gap:11px 12px;
+  padding-top:16px; border-top:1px solid var(--stroke);
+}
+.panel__stat{ display:flex; flex-direction:column; gap:3px; min-width:0; }
+.panel__stat dt{
+  font-size:8.5px; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--dim);
+}
+.panel__stat dd{
+  margin:0; font-size:12.5px; font-weight:600; color:var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.panel__stat.is-wide{ grid-column:1 / -1; }
+.panel__stat.is-wide dd{ font-size:11.5px; letter-spacing:.02em; }
+
+.element{
+  width:68px; height:80px; cursor:pointer;
+  user-select:none; -webkit-user-drag:none;
+  pointer-events:auto;
+  transition: opacity .35s, filter .35s;
+}
+.element.is-dim{ opacity:.16; filter: grayscale(.7) blur(.4px); }
+.element.is-dim:hover{ opacity:.5; filter: grayscale(.2); }
+.element__inner{
+  position:relative; width:100%; height:100%;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:2px; padding:5px 3px; border-radius:9px; overflow:hidden;
+  background: linear-gradient(160deg, rgba(20,29,48,.94) 0%, rgba(7,11,20,.97) 100%);
+  border:1px solid var(--c);
+  box-shadow: 0 0 11px -4px var(--c), inset 0 0 18px -13px var(--c);
+  transition: transform .3s cubic-bezier(.2,.9,.3,1.35), box-shadow .3s, background .3s;
+}
+.element__inner::after{
+  content:""; position:absolute; inset:0;
+  background: radial-gradient(130% 90% at 50% -10%, var(--c), transparent 62%);
+  opacity:.13; pointer-events:none; z-index:0; transition: opacity .3s;
+}
+.element__number,.element__symbol,.element__name,.element__weight{
+  position:relative; z-index:1; line-height:1;
+  text-align:center; max-width:100%;
+}
+.element__number{ font-size:9px; font-weight:600; letter-spacing:.06em; color:var(--muted); font-variant-numeric: tabular-nums; }
+.element__symbol{ font-size:22px; font-weight:800; letter-spacing:.01em; color:var(--c); text-shadow: 0 0 14px var(--c); }
+.element__name{ font-size:7.5px; letter-spacing:.02em; color:#b9c9e0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.element__weight{ font-size:7px; color:var(--dim); font-variant-numeric: tabular-nums; }
+.element:hover .element__inner{
+  transform: scale(1.15);
+  box-shadow: 0 0 26px -2px var(--c), 0 0 60px -22px var(--c), inset 0 0 24px -10px var(--c);
+}
+.element:hover .element__inner::after{ opacity:.26; }
+.element.is-expanded .element__inner{
+  transform: scale(1.24);
+  background: linear-gradient(160deg, rgba(34,50,82,.96) 0%, rgba(11,18,32,.98) 100%);
+  box-shadow:
+    0 0 0 1px var(--c), 0 0 34px 0 var(--c),
+    0 0 90px -18px var(--c), inset 0 0 30px -14px var(--c);
+}
+.element.is-expanded .element__inner::after{ opacity:.34; }
+.element.is-expanded .element__symbol{ color:#fff; text-shadow:0 0 20px var(--c); }
+
+@media (max-width: 980px){ .search-input{ width:150px; } .brand span{ display:none; } }
+@media (max-width: 860px){
+  .panel{ width:236px; top:auto; bottom:14px; right:14px; padding:16px; }
+  .panel__symbol{ font-size:34px; }
+}
+@media (max-width: 680px){
+  .ui-top{
+    flex-wrap: wrap; padding: 10px 12px;
+    padding-top: calc(10px + env(safe-area-inset-top));
+    gap: 8px;
+  }
+  .brand{ flex: 1 1 100%; }
+  .brand h1{ font-size:10px; letter-spacing:.18em; }
+  .modes{ order:2; flex:1; justify-content:space-between; padding:5px; }
+  .mode-btn{ padding: 8px 6px; font-size: 9px; letter-spacing:.1em; flex: 1; text-align: center; }
+  .tools{ order:3; flex: 1; width: 100%; }
+  .search-wrap{ flex: 1; }
+  .search-input{ width: 100%; padding: 9px 28px 9px 30px; font-size: 11px; }
+  .icon-btn{ width: 38px; height: 38px; flex: none; }
+  .legend{
+    display: grid;
+    transform: translateY(calc(100% + 30px));
+    opacity: 0; pointer-events: none;
+    transition: transform .35s cubic-bezier(.16,.9,.28,1), opacity .3s;
+    max-width: none; left: 14px; right: 14px;
+    bottom: calc(68px + env(safe-area-inset-bottom));
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .legend.is-open{ transform: none; opacity: 1; pointer-events: auto; }
+  .legend-toggle{ display: flex; }
+  .panel{
+    left: 10px; right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    top: auto; width: auto; max-height: 62dvh;
+    overflow-y: auto; border-radius: 20px; padding: 18px;
+    transform: translateY(calc(100% + 30px));
+  }
+  .panel.is-visible{ transform: none; }
+  .panel__symbol{ font-size: 38px; }
+  .hint{ font-size: 8px; letter-spacing:.1em; bottom: calc(12px + env(safe-area-inset-bottom)); }
+}
+</style>
+</head>
+<body>
+
+  <div id="scene"></div>
+
+  <header class="ui-top">
+    <div class="brand">
+      <h1>Periodic&nbsp;Table&nbsp;3D</h1>
+      <span>CSS3D · 118 elements</span>
+    </div>
+    <nav class="modes" id="modes">
+      <button class="mode-btn is-active" data-mode="table">Table</button>
+      <button class="mode-btn" data-mode="sphere">Sphere</button>
+      <button class="mode-btn" data-mode="helix">Helix</button>
+      <button class="mode-btn" data-mode="grid">Grid</button>
+    </nav>
+    <div class="tools">
+      <div class="search-wrap" id="searchWrap">
+        <input class="search-input" id="searchInput" type="text" placeholder="Search element…" autocomplete="off" spellcheck="false" />
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <button class="search-clear" id="searchClear" aria-label="Clear">&#10005;</button>
+      </div>
+      <button class="icon-btn" id="resetBtn" title="Reset view (R)">
+        <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <aside class="legend" id="legend">
+    <div class="legend__title">
+      <span>Categories</span>
+      <button class="legend__reset" id="legendReset">Clear</button>
+    </div>
+  </aside>
+
+  <button class="legend-toggle" id="legendToggle" aria-label="Categories">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/>
+      <circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>
+    </svg>
+  </button>
+
+  <aside class="panel" id="panel">
+    <button class="panel__close" id="panelClose" aria-label="Close">&#10005;</button>
+    <div class="panel__cat"></div>
+    <div class="panel__head">
+      <div class="panel__symbol"></div>
+      <div style="min-width:0;">
+        <div class="panel__name"></div>
+        <div class="panel__z"></div>
+      </div>
+    </div>
+    <dl class="panel__stats">
+      <div class="panel__stat"><dt>Atomic mass</dt><dd class="panel__mass"></dd></div>
+      <div class="panel__stat"><dt>Block</dt><dd class="panel__block"></dd></div>
+      <div class="panel__stat"><dt>Group</dt><dd class="panel__group"></dd></div>
+      <div class="panel__stat"><dt>Period</dt><dd class="panel__period"></dd></div>
+      <div class="panel__stat is-wide"><dt>Electron config</dt><dd class="panel__config"></dd></div>
+    </dl>
+  </aside>
+
+  <div class="hint">Drag · Scroll · Right-click pan · 1–4 modes · R reset · / search · Esc clear</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { CSS3DRenderer, CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ============ DATA ============ */
+const COLORS = {
+  alkali:'#ff6b6b', alkaline:'#ffa94d', transition:'#ffd43b', post:'#a9e34b',
+  metalloid:'#38d9a9', nonmetal:'#4dabf7', halogen:'#b197fc', noble:'#f783ac',
+  lanthanide:'#7ee787', actinide:'#e599f7'
+};
+const CAT_LABEL = {
+  alkali:'Alkali metal', alkaline:'Alkaline earth', transition:'Transition metal',
+  post:'Post-transition', metalloid:'Metalloid', nonmetal:'Nonmetal',
+  halogen:'Halogen', noble:'Noble gas', lanthanide:'Lanthanide', actinide:'Actinide'
+};
+const RAW = [
+  [1,'H','Hydrogen',1.008,'nonmetal',1,1],[2,'He','Helium',4.0026,'noble',18,1],
+  [3,'Li','Lithium',6.94,'alkali',1,2],[4,'Be','Beryllium',9.0122,'alkaline',2,2],
+  [5,'B','Boron',10.81,'metalloid',13,2],[6,'C','Carbon',12.011,'nonmetal',14,2],
+  [7,'N','Nitrogen',14.007,'nonmetal',15,2],[8,'O','Oxygen',15.999,'nonmetal',16,2],
+  [9,'F','Fluorine',18.998,'halogen',17,2],[10,'Ne','Neon',20.180,'noble',18,2],
+  [11,'Na','Sodium',22.990,'alkali',1,3],[12,'Mg','Magnesium',24.305,'alkaline',2,3],
+  [13,'Al','Aluminium',26.982,'post',13,3],[14,'Si','Silicon',28.085,'metalloid',14,3],
+  [15,'P','Phosphorus',30.974,'nonmetal',15,3],[16,'S','Sulfur',32.06,'nonmetal',16,3],
+  [17,'Cl','Chlorine',35.45,'halogen',17,3],[18,'Ar','Argon',39.948,'noble',18,3],
+  [19,'K','Potassium',39.098,'alkali',1,4],[20,'Ca','Calcium',40.078,'alkaline',2,4],
+  [21,'Sc','Scandium',44.956,'transition',3,4],[22,'Ti','Titanium',47.867,'transition',4,4],
+  [23,'V','Vanadium',50.942,'transition',5,4],[24,'Cr','Chromium',51.996,'transition',6,4],
+  [25,'Mn','Manganese',54.938,'transition',7,4],[26,'Fe','Iron',55.845,'transition',8,4],
+  [27,'Co','Cobalt',58.933,'transition',9,4],[28,'Ni','Nickel',58.693,'transition',10,4],
+  [29,'Cu','Copper',63.546,'transition',11,4],[30,'Zn','Zinc',65.38,'transition',12,4],
+  [31,'Ga','Gallium',69.723,'post',13,4],[32,'Ge','Germanium',72.630,'metalloid',14,4],
+  [33,'As','Arsenic',74.922,'metalloid',15,4],[34,'Se','Selenium',78.971,'nonmetal',16,4],
+  [35,'Br','Bromine',79.904,'halogen',17,4],[36,'Kr','Krypton',83.798,'noble',18,4],
+  [37,'Rb','Rubidium',85.468,'alkali',1,5],[38,'Sr','Strontium',87.62,'alkaline',2,5],
+  [39,'Y','Yttrium',88.906,'transition',3,5],[40,'Zr','Zirconium',91.224,'transition',4,5],
+  [41,'Nb','Niobium',92.906,'transition',5,5],[42,'Mo','Molybdenum',95.95,'transition',6,5],
+  [43,'Tc','Technetium',98,'transition',7,5],[44,'Ru','Ruthenium',101.07,'transition',8,5],
+  [45,'Rh','Rhodium',102.91,'transition',9,5],[46,'Pd','Palladium',106.42,'transition',10,5],
+  [47,'Ag','Silver',107.87,'transition',11,5],[48,'Cd','Cadmium',112.41,'transition',12,5],
+  [49,'In','Indium',114.82,'post',13,5],[50,'Sn','Tin',118.71,'post',14,5],
+  [51,'Sb','Antimony',121.76,'metalloid',15,5],[52,'Te','Tellurium',127.60,'metalloid',16,5],
+  [53,'I','Iodine',126.90,'halogen',17,5],[54,'Xe','Xenon',131.29,'noble',18,5],
+  [55,'Cs','Caesium',132.91,'alkali',1,6],[56,'Ba','Barium',137.33,'alkaline',2,6],
+  [57,'La','Lanthanum',138.91,'lanthanide',0,0],[58,'Ce','Cerium',140.12,'lanthanide',0,0],
+  [59,'Pr','Praseodymium',140.91,'lanthanide',0,0],[60,'Nd','Neodymium',144.24,'lanthanide',0,0],
+  [61,'Pm','Promethium',145,'lanthanide',0,0],[62,'Sm','Samarium',150.36,'lanthanide',0,0],
+  [63,'Eu','Europium',151.96,'lanthanide',0,0],[64,'Gd','Gadolinium',157.25,'lanthanide',0,0],
+  [65,'Tb','Terbium',158.93,'lanthanide',0,0],[66,'Dy','Dysprosium',162.50,'lanthanide',0,0],
+  [67,'Ho','Holmium',164.93,'lanthanide',0,0],[68,'Er','Erbium',167.26,'lanthanide',0,0],
+  [69,'Tm','Thulium',168.93,'lanthanide',0,0],[70,'Yb','Ytterbium',173.05,'lanthanide',0,0],
+  [71,'Lu','Lutetium',174.97,'lanthanide',0,0],[72,'Hf','Hafnium',178.49,'transition',4,6],
+  [73,'Ta','Tantalum',180.95,'transition',5,6],[74,'W','Tungsten',183.84,'transition',6,6],
+  [75,'Re','Rhenium',186.21,'transition',7,6],[76,'Os','Osmium',190.23,'transition',8,6],
+  [77,'Ir','Iridium',192.22,'transition',9,6],[78,'Pt','Platinum',195.08,'transition',10,6],
+  [79,'Au','Gold',196.97,'transition',11,6],[80,'Hg','Mercury',200.59,'transition',12,6],
+  [81,'Tl','Thallium',204.38,'post',13,6],[82,'Pb','Lead',207.2,'post',14,6],
+  [83,'Bi','Bismuth',208.98,'post',15,6],[84,'Po','Polonium',209,'post',16,6],
+  [85,'At','Astatine',210,'halogen',17,6],[86,'Rn','Radon',222,'noble',18,6],
+  [87,'Fr','Francium',223,'alkali',1,7],[88,'Ra','Radium',226,'alkaline',2,7],
+  [89,'Ac','Actinium',227,'actinide',0,0],[90,'Th','Thorium',232.04,'actinide',0,0],
+  [91,'Pa','Protactinium',231.04,'actinide',0,0],[92,'U','Uranium',238.03,'actinide',0,0],
+  [93,'Np','Neptunium',237,'actinide',0,0],[94,'Pu','Plutonium',244,'actinide',0,0],
+  [95,'Am','Americium',243,'actinide',0,0],[96,'Cm','Curium',247,'actinide',0,0],
+  [97,'Bk','Berkelium',247,'actinide',0,0],[98,'Cf','Californium',251,'actinide',0,0],
+  [99,'Es','Einsteinium',252,'actinide',0,0],[100,'Fm','Fermium',257,'actinide',0,0],
+  [101,'Md','Mendelevium',258,'actinide',0,0],[102,'No','Nobelium',259,'actinide',0,0],
+  [103,'Lr','Lawrencium',266,'actinide',0,0],[104,'Rf','Rutherfordium',267,'transition',4,7],
+  [105,'Db','Dubnium',268,'transition',5,7],[106,'Sg','Seaborgium',269,'transition',6,7],
+  [107,'Bh','Bohrium',270,'transition',7,7],[108,'Hs','Hassium',269,'transition',8,7],
+  [109,'Mt','Meitnerium',278,'transition',9,7],[110,'Ds','Darmstadtium',281,'transition',10,7],
+  [111,'Rg','Roentgenium',282,'transition',11,7],[112,'Cn','Copernicium',285,'transition',12,7],
+  [113,'Nh','Nihonium',286,'post',13,7],[114,'Fl','Flerovium',289,'post',14,7],
+  [115,'Mc','Moscovium',290,'post',15,7],[116,'Lv','Livermorium',293,'post',16,7],
+  [117,'Ts','Tennessine',294,'halogen',17,7],[118,'Og','Oganesson',294,'noble',18,7]
+];
+const ELEMENTS = RAW.map(r => ({
+  z:r[0], symbol:r[1], name:r[2], weight:r[3], cat:r[4], group:r[5], period:r[6]
+}));
+
+/* ============ HELPERS ============ */
+const isMobile = matchMedia('(max-width: 768px), (pointer: coarse)').matches;
+const SUP = {1:'¹',2:'²',3:'³',4:'⁴',5:'⁵',6:'⁶',7:'⁷',8:'⁸',9:'⁹',10:'¹⁰',11:'¹¹',12:'¹²',13:'¹³',14:'¹⁴'};
+const ORBITALS = [
+  ['1s',2],['2s',2],['2p',6],['3s',2],['3p',6],['4s',2],['3d',10],['4p',6],
+  ['5s',2],['4d',10],['5p',6],['6s',2],['4f',14],['5d',10],['6p',6],
+  ['7s',2],['5f',14],['6d',10],['7p',6]
+];
+function electronConfig(z){
+  let rem = z; const parts = [];
+  for (const [name, cap] of ORBITALS){
+    if (rem <= 0) break;
+    const n = Math.min(cap, rem); rem -= n;
+    parts.push(name + SUP[n]);
+  }
+  return parts.join(' ');
+}
+
+/* ============ SCENE ============ */
+const container = document.getElementById('scene');
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, innerWidth/innerHeight, 1, 40000);
+camera.position.set(0, 0, 1600);
+
+const renderer = new CSS3DRenderer();
+renderer.setSize(innerWidth, innerHeight);
+container.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.075;
+controls.rotateSpeed = isMobile ? 0.75 : 0.55;
+controls.zoomSpeed   = isMobile ? 1.2  : 1.0;
+controls.panSpeed    = isMobile ? 1.2  : 0.9;
+controls.screenSpacePanning = true;
+controls.minDistance = 120;
+controls.maxDistance = 12000;
+controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
+
+/* ============ CARDS ============ */
+const GAP_X = 78, GAP_Y = 92;
+const cards  = [];
+const cardOf = new WeakMap();
+
+ELEMENTS.forEach((el, index) => {
+  const div = document.createElement('div');
+  div.className = 'element';
+  div.style.setProperty('--c', COLORS[el.cat] || '#8fa6c4');
+  div.innerHTML =
+    '<div class="element__inner">' +
+      '<span class="element__number">'+el.z+'</span>' +
+      '<span class="element__symbol">'+el.symbol+'</span>' +
+      '<span class="element__name">'+el.name+'</span>' +
+      '<span class="element__weight">'+el.weight+'</span>' +
+    '</div>';
+  const obj = new CSS3DObject(div);
+  obj.position.set(0,0,0);
+  scene.add(obj);
+  const card = { el, index, div, obj, anim: null };
+  cards.push(card);
+  cardOf.set(div, card);
+});
+
+/* ============ LAYOUTS ============ */
+const _dummy = new THREE.Object3D();
+function quatFacing(pos, target){
+  _dummy.position.copy(pos); _dummy.up.set(0,1,0); _dummy.lookAt(target);
+  return _dummy.quaternion.clone();
+}
+function layoutTable(i, el){
+  let col, row;
+  if (el.cat === 'lanthanide')    { col = 3 + (el.z - 57); row = 8.85; }
+  else if (el.cat === 'actinide') { col = 3 + (el.z - 89); row = 9.85; }
+  else                            { col = el.group;         row = el.period; }
+  return {
+    pos: new THREE.Vector3((col-9.5)*GAP_X, -(row-5.45)*GAP_Y, 0),
+    quat: new THREE.Quaternion()
+  };
+}
+const SPHERE_R = 620;
+function layoutSphere(i, el, n){
+  const phi   = Math.acos(1 - 2*(i+0.5)/n);
+  const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+  const pos = new THREE.Vector3(
+    SPHERE_R * Math.sin(phi) * Math.cos(theta),
+    SPHERE_R * Math.cos(phi),
+    SPHERE_R * Math.sin(phi) * Math.sin(theta)
+  );
+  return { pos, quat: quatFacing(pos, pos.clone().multiplyScalar(2)) };
+}
+const HELIX_R = 400, HELIX_H = 1400, HELIX_TURNS = 5;
+function layoutHelix(i, el, n){
+  const t = n > 1 ? i/(n-1) : 0;
+  const a = t * Math.PI * 2 * HELIX_TURNS;
+  const x = Math.cos(a)*HELIX_R, z = Math.sin(a)*HELIX_R, y = (0.5-t)*HELIX_H;
+  const pos = new THREE.Vector3(x, y, z);
+  return { pos, quat: quatFacing(pos, new THREE.Vector3(x*2, y, z*2)) };
+}
+const GRID_S = 155;
+function layoutGrid(i){
+  const ix = i%5, iy = Math.floor(i/5)%5, iz = Math.floor(i/25)%5;
+  return {
+    pos: new THREE.Vector3((ix-2)*GRID_S, (2-iy)*GRID_S, (iz-2)*GRID_S),
+    quat: new THREE.Quaternion()
+  };
+}
+const LAYOUTS = {
+  table:  { solve: layoutTable,  halfW: 780, halfH: 560 },
+  sphere: { solve: layoutSphere, halfW: 680, halfH: 680 },
+  helix:  { solve: layoutHelix,  halfW: 460, halfH: 760 },
+  grid:   { solve: layoutGrid,   halfW: 470, halfH: 470 }
+};
+
+/* ============ CAMERA FRAMING ============ */
+function updateCameraFov(){
+  camera.fov = innerWidth < innerHeight ? 68 : 50;
+  camera.updateProjectionMatrix();
+}
+updateCameraFov();
+
+function fitDistance(halfW, halfH){
+  const aspect = innerWidth / innerHeight;
+  const isPortrait = aspect < 1;
+  const vFov = camera.fov * Math.PI / 180;
+  const t = Math.tan(vFov/2);
+  let d = Math.max(halfH/t, halfW/(t*aspect));
+  if (isPortrait) d *= 0.9;
+  if (innerWidth < 480) d *= 0.92;
+  return d * 1.14;
+}
+
+/* ============ ANIMATION ============ */
+const easeInOutCubic = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+const camAnim = { from:new THREE.Vector3(), to:new THREE.Vector3(), start:0, duration:1100, active:false };
+function animateCameraTo(target, duration){
+  camAnim.from.copy(camera.position);
+  camAnim.to.copy(target);
+  camAnim.start = performance.now();
+  camAnim.duration = Math.max(1, duration || 1100);
+  camAnim.active = true;
+}
+let currentMode = 'table';
+function applyLayout(mode, instant){
+  const cfg = LAYOUTS[mode];
+  if (!cfg) return;
+  currentMode = mode;
+  const n = cards.length;
+  const now = performance.now();
+  const delayStep = isMobile ? 1.1 : 2.0;
+  const cardDur   = isMobile ? 900 : 1150;
+
+  cards.forEach((card, i) => {
+    const res = cfg.solve(i, card.el, n);
+    if (instant){
+      card.obj.position.copy(res.pos);
+      card.obj.quaternion.copy(res.quat);
+      card.anim = null;
+      return;
+    }
+    card.anim = {
+      fromP: card.obj.position.clone(),
+      toP: res.pos,
+      fromQ: card.obj.quaternion.clone(),
+      toQ: res.quat,
+      start: now,
+      delay: i * delayStep,
+      duration: cardDur
+    };
+  });
+
+  const dist = fitDistance(cfg.halfW, cfg.halfH);
+  const camDur = instant ? 0 : (isMobile ? 800 : 1100);
+  animateCameraTo(new THREE.Vector3(0,0,dist), camDur);
+  if (instant){
+    controls.target.set(0,0,0);
+    controls.update();
+  }
+}
+
+/* ============ LOOP ============ */
+function animate(now){
+  requestAnimationFrame(animate);
+  for (let i=0; i<cards.length; i++){
+    const c = cards[i];
+    if (!c.anim) continue;
+    const a = c.anim;
+    let t = (now - a.start - a.delay) / a.duration;
+    if (t < 0) t = 0;
+    if (t >= 1){
+      c.obj.position.copy(a.toP);
+      c.obj.quaternion.copy(a.toQ);
+      c.anim = null;
+      continue;
+    }
+    const e = easeInOutCubic(t);
+    c.obj.position.lerpVectors(a.fromP, a.toP, e);
+    c.obj.quaternion.copy(a.fromQ).slerp(a.toQ, e);
+  }
+  if (camAnim.active){
+    let t = (now - camAnim.start) / camAnim.duration;
+    if (t >= 1){ t = 1; camAnim.active = false; }
+    const e = easeInOutCubic(t);
+    camera.position.lerpVectors(camAnim.from, camAnim.to, e);
+    controls.target.lerp(new THREE.Vector3(0,0,0), e*0.5);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+/* ============ INTERACTION ============ */
+let downX=0, downY=0, downTime=0, hasDown=false;
+function handleTap(x, y){
+  const target = document.elementFromPoint(x, y);
+  if (!target){ closePanel(); return; }
+  const cardEl = target.closest ? target.closest('.element') : null;
+  if (cardEl && cardOf.has(cardEl)){
+    selectCard(cardOf.get(cardEl));
+    if (navigator.vibrate) navigator.vibrate(8);
+  } else closePanel();
+}
+renderer.domElement.addEventListener('pointerdown', e => {
+  downX = e.clientX; downY = e.clientY;
+  downTime = performance.now(); hasDown = true;
+});
+renderer.domElement.addEventListener('pointerup', e => {
+  if (!hasDown) return;
+  hasDown = false;
+  const moved = Math.hypot(e.clientX-downX, e.clientY-downY);
+  const elapsed = performance.now() - downTime;
+  if (moved > 10 || elapsed > 500) return;
+  handleTap(e.clientX, e.clientY);
+});
+renderer.domElement.addEventListener('pointercancel', () => { hasDown = false; });
+
+/* ============ PANEL ============ */
+const panel = document.getElementById('panel');
+const panelCat    = panel.querySelector('.panel__cat');
+const panelSymbol = panel.querySelector('.panel__symbol');
+const panelName   = panel.querySelector('.panel__name');
+const panelZ      = panel.querySelector('.panel__z');
+const panelMass   = panel.querySelector('.panel__mass');
+const panelGroup  = panel.querySelector('.panel__group');
+const panelPeriod = panel.querySelector('.panel__period');
+const panelBlock  = panel.querySelector('.panel__block');
+const panelConfig = panel.querySelector('.panel__config');
+let selectedCard = null;
+
+function blockOf(el){
+  if (el.cat === 'lanthanide' || el.cat === 'actinide') return 'f';
+  if (el.group <= 2) return 's';
+  if (el.group >= 13) return 'p';
+  return 'd';
+}
+function selectCard(card){
+  if (!card) return;
+  if (selectedCard) selectedCard.div.classList.remove('is-expanded');
+  selectedCard = card;
+  card.div.classList.add('is-expanded');
+  const el = card.el;
+  const color = COLORS[el.cat] || '#4fd1ff';
+  panel.style.setProperty('--c', color);
+  panelCat.textContent    = CAT_LABEL[el.cat] || el.cat;
+  panelSymbol.textContent = el.symbol;
+  panelName.textContent   = el.name;
+  panelZ.textContent      = 'Z = ' + el.z;
+  panelMass.textContent   = el.weight;
+  panelGroup.textContent  = el.group  ? el.group  : '—';
+  panelPeriod.textContent = el.period ? el.period : '—';
+  panelBlock.textContent  = blockOf(el);
+  panelConfig.textContent = electronConfig(el.z);
+  panel.classList.add('is-visible');
+  document.body.classList.add('panel-open');
+}
+function closePanel(){
+  if (selectedCard){
+    selectedCard.div.classList.remove('is-expanded');
+    selectedCard = null;
+  }
+  panel.classList.remove('is-visible');
+  document.body.classList.remove('panel-open');
+}
+document.getElementById('panelClose').addEventListener('click', closePanel);
+
+/* ============ FILTER ============ */
+let activeCategory = null;
+let searchQuery = '';
+function applyFilters(){
+  const q = searchQuery.trim().toLowerCase();
+  const hasQuery = q.length > 0;
+  const hasCat = !!activeCategory;
+  const filtering = hasQuery || hasCat;
+  cards.forEach(card => {
+    let match = true;
+    if (hasCat && card.el.cat !== activeCategory) match = false;
+    if (hasQuery){
+      const el = card.el;
+      const hit =
+        el.name.toLowerCase().includes(q) ||
+        el.symbol.toLowerCase() === q ||
+        el.symbol.toLowerCase().startsWith(q) ||
+        String(el.z) === q;
+      if (!hit) match = false;
+    }
+    card.div.classList.toggle('is-dim', filtering && !match);
+  });
+}
+
+/* ============ LEGEND ============ */
+const legend = document.getElementById('legend');
+const legendItems = {};
+Object.keys(COLORS).forEach(key => {
+  const item = document.createElement('div');
+  item.className = 'legend__item';
+  item.dataset.cat = key;
+  item.innerHTML = '<i style="--c:'+COLORS[key]+'"></i>' + (CAT_LABEL[key] || key);
+  item.addEventListener('click', () => {
+    activeCategory = (activeCategory === key) ? null : key;
+    Object.values(legendItems).forEach(el =>
+      el.classList.toggle('is-active', el.dataset.cat === activeCategory)
+    );
+    applyFilters();
+  });
+  legend.appendChild(item);
+  legendItems[key] = item;
+});
+document.getElementById('legendReset').addEventListener('click', () => {
+  activeCategory = null;
+  Object.values(legendItems).forEach(el => el.classList.remove('is-active'));
+  applyFilters();
+});
+const legendToggle = document.getElementById('legendToggle');
+legendToggle.addEventListener('click', () => {
+  legend.classList.toggle('is-open');
+});
+
+/* ============ SEARCH ============ */
+const searchWrap  = document.getElementById('searchWrap');
+const searchInput = document.getElementById('searchInput');
+const searchClear = document.getElementById('searchClear');
+searchInput.addEventListener('input', () => {
+  searchQuery = searchInput.value;
+  searchWrap.classList.toggle('has-value', searchQuery.length > 0);
+  applyFilters();
+});
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter'){
+    e.preventDefault();
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return;
+    const found = cards.find(c =>
+      c.el.symbol.toLowerCase() === q || c.el.name.toLowerCase() === q
+    ) || cards.find(c =>
+      c.el.symbol.toLowerCase().startsWith(q) ||
+      c.el.name.toLowerCase().startsWith(q) ||
+      String(c.el.z) === q
+    );
+    if (found) selectCard(found);
+  }
+  if (e.key === 'Escape'){
+    searchInput.value = ''; searchQuery = '';
+    searchWrap.classList.remove('has-value');
+    applyFilters(); searchInput.blur();
+  }
+});
+searchClear.addEventListener('click', () => {
+  searchInput.value = ''; searchQuery = '';
+  searchWrap.classList.remove('has-value');
+  applyFilters(); searchInput.focus();
+});
+
+/* ============ MODES ============ */
+const modeButtons = Array.from(document.querySelectorAll('.mode-btn'));
+function setMode(mode){
+  if (!mode || !LAYOUTS[mode]) return;
+  modeButtons.forEach(b => b.classList.toggle('is-active', b.dataset.mode === mode));
+  closePanel();
+  legend.classList.remove('is-open');
+  applyLayout(mode, false);
+}
+modeButtons.forEach(btn => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
+
+/* ============ RESET ============ */
+function resetView(){
+  closePanel();
+  const cfg = LAYOUTS[currentMode];
+  if (!cfg) return;
+  const dist = fitDistance(cfg.halfW, cfg.halfH);
+  animateCameraTo(new THREE.Vector3(0,0,dist), 800);
+  controls.target.set(0,0,0);
+}
+document.getElementById('resetBtn').addEventListener('click', resetView);
+
+/* ============ KEYBOARD ============ */
+document.addEventListener('keydown', e => {
+  if (document.activeElement === searchInput) return;
+  switch (e.key){
+    case '1': setMode('table'); break;
+    case '2': setMode('sphere'); break;
+    case '3': setMode('helix'); break;
+    case '4': setMode('grid'); break;
+    case 'r': case 'R': resetView(); break;
+    case '/':
+      e.preventDefault();
+      searchInput.focus(); searchInput.select();
+      break;
+    case 'Escape':
+      closePanel();
+      if (searchQuery){
+        searchInput.value = ''; searchQuery = '';
+        searchWrap.classList.remove('has-value');
+        applyFilters();
+      }
+      break;
+  }
+});
+
+/* ============ RESIZE ============ */
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  const w = innerWidth, h = innerHeight;
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+  updateCameraFov();
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    const cfg = LAYOUTS[currentMode];
+    if (!cfg) return;
+    const dist = fitDistance(cfg.halfW, cfg.halfH);
+    animateCameraTo(new THREE.Vector3(0,0,dist), 500);
+  }, 150);
+});
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => {
+    updateCameraFov();
+    const cfg = LAYOUTS[currentMode];
+    if (!cfg) return;
+    camera.aspect = innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+    const dist = fitDistance(cfg.halfW, cfg.halfH);
+    animateCameraTo(new THREE.Vector3(0,0,dist), 500);
+  }, 250);
+});
+
+/* ============ BOOT ============ */
+cards.forEach((c, i) => {
+  const a = i * 0.37;
+  c.obj.position.set(Math.cos(a)*900, Math.sin(a*1.7)*700, Math.sin(a)*900);
+  c.obj.quaternion.identity();
+});
+applyLayout('table', false);
+requestAnimationFrame(animate);
+setTimeout(() => {
+  const cfg = LAYOUTS[currentMode];
+  if (cfg){
+    const dist = fitDistance(cfg.halfW, cfg.halfH);
+    animateCameraTo(new THREE.Vector3(0,0,dist), 900);
+  }
+}, 60);
+</script>
+</body>
+</html>
